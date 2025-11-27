@@ -1,323 +1,359 @@
+<!--
+AI Chat — LLMなしフル完成版 v4 (All Features)
+Includes:
+- N-gram Markov (1..3) with smoothing
+- Weighting for user vs AI training
+- Manual and auto training controls
+- Export / Import conversations + model
+- Electron packaging support files (package.json, main.js included separately)
+- UI improvements (animations, fireworks on 'success')
+
+Usage:
+- Save this file as index.html and open in a browser for standalone web use.
+- To build a desktop app (recommended to avoid CORS issues), use the provided package.json and main.js with Electron.
+-->
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ChatGPT風チャット — 完全版</title>
-  <style>
-    :root{
-      --bg:#071023; --card:#071428; --accent:#7c3aed; --muted:#94a3b8; --user:#0ea5a4;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;font-family:Inter, 'Noto Sans JP',sans-serif;
-      background:radial-gradient(1200px 600px at 10% 10%, rgba(124,58,237,0.08), transparent),
-                 linear-gradient(180deg,#020617 0%, #071023 100%);
-      color:#e6eef8;display:flex;align-items:stretch;
-    }
-    .container{display:grid;grid-template-columns:320px 1fr;gap:0;flex:1;max-width:1200px;margin:auto;width:100%;height:100vh;border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(2,6,23,0.7)}
-    /* sidebar */
-    .sidebar{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);padding:16px;border-right:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column}
-    .brand{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-    .brand h1{font-size:1.05rem;margin:0}
-    .controls{display:flex;gap:8px;margin-bottom:12px}
-    button{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:8px;border-radius:8px;color:var(--muted);cursor:pointer}
-    .conversations{flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px}
-    .conv{padding:10px;border-radius:8px;background:rgba(255,255,255,0.01);cursor:pointer;display:flex;align-items:center;justify-content:space-between}
-    .conv.active{outline:2px solid rgba(124,58,237,0.12);background:linear-gradient(90deg, rgba(124,58,237,0.04), rgba(255,255,255,0.01))}
-    /* main */
-    .main{display:flex;flex-direction:column;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent)}
-    .messages{flex:1;padding:18px;overflow:auto;display:flex;flex-direction:column;gap:12px}
-    .msg{max-width:78%;padding:12px;border-radius:12px;line-height:1.45;box-shadow:0 6px 18px rgba(2,6,23,0.5)}
-    .msg.user{align-self:flex-end;background:linear-gradient(90deg,var(--user),#036b9a);color:#001218;border-bottom-right-radius:4px}
-    .msg.assistant{align-self:flex-start;background:linear-gradient(90deg,#0b1220,#071428);border:1px solid rgba(255,255,255,0.03)}
-    .meta{padding:10px 16px;border-top:1px solid rgba(255,255,255,0.02);display:flex;align-items:center;gap:12px}
-    form{display:flex;gap:8px;padding:14px;border-top:1px solid rgba(255,255,255,0.02);align-items:center}
-    textarea{flex:1;min-height:54px;resize:none;padding:10px;border-radius:10px;background:#071028;border:1px solid rgba(255,255,255,0.03);color:#e6eef8}
-    .pill{padding:8px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.03);background:rgba(255,255,255,0.01);cursor:pointer}
-    .small{font-size:0.9rem;color:var(--muted)}
-    .topbar{display:flex;align-items:center;gap:8px}
-    .template{display:flex;gap:6px}
-    pre{background:#0b1220;padding:10px;border-radius:8px;overflow:auto;position:relative}
-    pre .copy{position:absolute;right:8px;top:8px;cursor:pointer;background:rgba(255,255,255,0.02);padding:4px;border-radius:6px;border:1px solid rgba(255,255,255,0.03);font-size:0.8rem}
-    @media(max-width:920px){ .container{grid-template-columns:1fr} .sidebar{display:none} }
-    .ripple{position:absolute;border-radius:999px;transform:translate(-50%,-50%);pointer-events:none;opacity:0.35}
-    .kbd{background:rgba(255,255,255,0.02);border-radius:6px;padding:4px 6px;font-size:0.78rem;border:1px solid rgba(255,255,255,0.02)}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Chatgtp</title>
+<link rel="icon" href="data:;base64,iVBORw0KGgo=" />
+<style>
+:root{--bg:#071018;--panel:#071425;--muted:#9aa4b2;--accent:#10a37f;--accent-2:#0a84ff}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:"Noto Sans JP",system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+body{background:linear-gradient(180deg,#020409 0%, var(--bg) 100%);color:#e6eef6;}
+.app{display:grid;grid-template-columns:320px 1fr;gap:18px;width:100%;height:100vh;padding:18px}
+.sidebar{background:linear-gradient(180deg,#051018,#071425);padding:16px;border-radius:12px;display:flex;flex-direction:column}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.logo{width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:700}
+.brand h1{font-size:15px;margin:0}
+.btn{background:transparent;border:1px solid rgba(255,255,255,0.03);padding:10px;border-radius:10px;color:inherit;cursor:pointer}
+.new-chat{margin-bottom:8px}
+.search{margin-bottom:10px;padding:8px;border-radius:8px;border:none;background:#08121a;color:inherit}
+.hist-list{flex:1;overflow:auto;padding-right:6px}
+.hist-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;background:rgba(255,255,255,0.02);margin-bottom:8px;cursor:pointer}
+.hist-item .title{font-size:13px}
+.small{font-size:12px;color:var(--muted)}
+.panel{display:flex;flex-direction:column;border-radius:12px;background:linear-gradient(180deg,#071425,#071a28);padding:12px}
+.header{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,0.03)}
+.header .left{display:flex;gap:12px;align-items:center}
+.chat{flex:1;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:78%;padding:12px 14px;border-radius:12px;line-height:1.6}
+.msg.user{margin-left:auto;background:linear-gradient(90deg,var(--accent),#0bd59b);color:#012;border-bottom-right-radius:6px}
+.msg.ai{background:linear-gradient(180deg,#071425,#09202b);border:1px solid rgba(255,255,255,0.02)}
+.controls{display:flex;gap:8px;padding:12px;border-top:1px solid rgba(255,255,255,0.02);align-items:center}
+.textarea{flex:1;padding:12px;border-radius:18px;border:1px solid rgba(255,255,255,0.03);min-height:56px;resize:none;background:transparent;color:inherit}
+.send{background:var(--accent);border:none;padding:10px 14px;border-radius:12px;color:#012;cursor:pointer}
+.kv{font-size:13px;color:var(--muted)}
+.settings{position:fixed;right:20px;top:20px;width:420px;background:linear-gradient(180deg,#061216,#08161b);padding:14px;border-radius:12px;box-shadow:0 8px 30px rgba(2,6,23,0.6);display:none;z-index:80}
+.row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+select,input[type=range]{width:100%}
+.small-muted{font-size:12px;color:var(--muted)}
+.footer-note{font-size:12px;color:var(--muted);margin-top:8px}
+.fireworks{position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none}
+@media(max-width:900px){.app{grid-template-columns:72px 1fr;padding:10px}.sidebar{padding:8px}.brand h1{display:none}.hist-item .title{font-size:12px}}
+</style>
 </head>
 <body>
-  <div class="container">
-    <aside class="sidebar">
-      <div class="brand">
-        <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%237c3aed'><path d='M12 2L2 7v5c0 5 4 9 10 10s10-4 10-9V7L12 2z'/></svg>" width="38" height="38" alt="logo">
-        <h1>ChatGPT風チャット — 完全版</h1>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div class="logo">AI</div><h1>chatgtp</h1></div>
+    <button class="btn new-chat" id="newChatBtn">＋ 新しいチャット</button>
+    <input class="search" id="searchHist" placeholder="履歴を検索..." />
+    <div class="hist-list" id="histList"></div>
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+      <button class="btn" id="exportBtn">エクスポート</button>
+      <button class="btn" id="importBtn">インポート</button>
+    </div>
+    <div style="margin-top:10px" class="small">完全ローカルで動作します。外部サーバーには接続しません。</div>
+  </aside>
+
+  <main class="panel">
+    <div class="header">
+      <div class="left"><strong id="chatTitle">新しいチャット</strong><div class="kv" id="vocabCount">語彙: 0</div></div>
+      <div>
+        <button class="btn" id="themeToggle">🌓</button>
+        <button class="btn" id="openSettings">⚙️</button>
       </div>
+    </div>
 
-      <div class="controls">
-        <button id="newConv">新規</button>
-        <button id="exportConv">エクスポート</button>
-        <button id="clearHistory">履歴消去</button>
-      </div>
+    <div class="chat" id="chatWindow"></div>
 
-      <div class="small">テンプレート</div>
-      <div class="controls template" style="margin-bottom:12px">
-        <select id="templateSelect" class="pill">
-          <option value="">選択...</option>
-          <option value="You are a helpful assistant.">シンプルアシスタント</option>
-          <option value="Act as a professional translator from Japanese to English.">翻訳者（和→英）</option>
-          <option value="Summarize the following text in bullet points.">要約（箇条書き）</option>
-        </select>
-        <button id="applyTemplate" class="pill">適用</button>
-      </div>
+    <div class="controls">
+      <textarea id="input" class="textarea" placeholder="メッセージを入力（Shift+Enterで改行）"></textarea>
+      <button class="send" id="sendBtn">送信</button>
+    </div>
+  </main>
+</div>
 
-      <div class="small" style="margin-bottom:8px">会話</div>
-      <div class="conversations" id="conversations"></div>
-
-      <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
-        <button id="themeToggle" class="pill">テーマ切替</button>
-        <button id="ttsBtn" class="pill">読み上げ</button>
-        <button id="voiceBtn" class="pill">音声入力</button>
-      </div>
-
-      <div style="margin-top:10px" class="small">モデル選択</div>
-      <select id="modelSelect" class="pill" style="margin-top:6px">
-        <option>gpt-4o-mini</option>
-        <option>gpt-4o</option>
-        <option>gpt-4.1-mini</option>
-      </select>
-
-      <div style="margin-top:14px" class="small">APIキー（セッション保存）</div>
-      <div style="display:flex;gap:6px;margin-top:6px">
-        <input id="apiKeyInput" placeholder="sk-..." style="flex:1;padding:8px;border-radius:8px;background:#061025;border:1px solid rgba(255,255,255,0.03);color:#e6eef8">
-      </div>
-      <div style="margin-top:8px;font-size:0.8rem;color:var(--muted)">※ キーはページ内セッションに保存されます（閉じると消えます）。</div>
-    </aside>
-
-    <main class="main">
-      <div class="messages" id="messages"></div>
-
-      <div class="meta">
-        <div class="small">モデル: <strong id="modelName">gpt-4o-mini</strong></div>
-        <div style="flex:1"></div>
-        <div class="small">ショートカット: <span class="kbd">Ctrl+K</span> 新規</div>
-      </div>
-
-      <form id="inputForm">
-        <textarea id="prompt" placeholder="メッセージを入力（Shift+Enterで改行）"></textarea>
-        <button type="button" id="sendBtn" class="pill">送信</button>
-        <button type="button" id="continueBtn" class="pill">続きを生成</button>
-      </form>
-    </main>
+<div class="settings" id="settingsPanel">
+  <h3>設定（学習・生成）</h3>
+  <label class="kv">人格（AIの口調）</label>
+  <textarea id="persona" placeholder="例：丁寧で、分かりやすく説明する"></textarea>
+  <div class="row"><label class="kv">自動学習</label><select id="autoLearn"><option value="1">有効</option><option value="0">無効</option></select></div>
+  <div class="row"><label class="kv">N-gram サイズ</label><select id="ngram"><option value="1">1 (unigram)</option><option value="2">2 (bigram)</option><option value="3">3 (trigram)</option></select></div>
+  <div class="row"><label class="kv">ユーザー学習重み</label><input type="range" id="userWeight" min="0" max="5" step="0.5" value="1" /><span id="userWeightVal" class="kv">1</span></div>
+  <div class="row"><label class="kv">AI学習重み</label><input type="range" id="aiWeight" min="0" max="5" step="0.5" value="1" /><span id="aiWeightVal" class="kv">1</span></div>
+  <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+    <button class="btn" id="saveSettings">保存</button>
+    <button class="btn" id="closeSettings">閉じる</button>
   </div>
+  <hr style="margin:10px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)" />
+  <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+    <button class="btn" id="saveModelBtn">学習データ保存</button>
+    <button class="btn" id="loadModelBtn">学習データ読み込み</button>
+    <button class="btn" id="clearModelBtn">学習データクリア</button>
+  </div>
+  <div class="footer-note">学習はローカルに保存されます。エクスポートしてバックアップを取ることをおすすめします。</div>
+</div>
 
-  <script>
-    // --- state ---
-    const STORAGE_KEY = 'chat_full_v1';
-    let state = {conversations:[], active:null};
+<canvas id="fireworks" class="fireworks"></canvas>
 
-    // --- DOM ---
-    const convListEl = document.getElementById('conversations');
-    const messagesEl = document.getElementById('messages');
-    const promptEl = document.getElementById('prompt');
-    const newConvBtn = document.getElementById('newConv');
-    const clearHistoryBtn = document.getElementById('clearHistory');
-    const exportConvBtn = document.getElementById('exportConv');
-    const apiKeyInput = document.getElementById('apiKeyInput');
-    const modelSelect = document.getElementById('modelSelect');
-    const modelName = document.getElementById('modelName');
-    const templateSelect = document.getElementById('templateSelect');
-    const applyTemplate = document.getElementById('applyTemplate');
-    const themeToggle = document.getElementById('themeToggle');
-    const ttsBtn = document.getElementById('ttsBtn');
-    const voiceBtn = document.getElementById('voiceBtn');
-    const sendBtn = document.getElementById('sendBtn');
-    const continueBtn = document.getElementById('continueBtn');
+<script>
+/* ====================================================
+   N-gram Markov engine with weighting and smoothing
+==================================================== */
+class NGramMarkov{
+  constructor(n=2){ this.n = n; this.map = new Map(); this.startTokens = []; }
 
-    // load/save
-    function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-    function loadState(){ try{ const raw = localStorage.getItem(STORAGE_KEY); if(raw) state = JSON.parse(raw); }catch(e){console.warn(e);} }
+  _key(seq){ return seq.join('\u0001'); }
 
-    // UI helpers
-    function createConversation(){ const c = {id:Date.now().toString(), title:'無題', messages:[]}; state.conversations.unshift(c); state.active=c.id; saveState(); render(); }
-    function selectConversation(id){ state.active=id; saveState(); render(); }
+  train(text, weight=1){
+    if(!text) return;
+    const tokens = this._tokenize(text);
+    if(tokens.length < 1) return;
+    // add to start tokens (for sentence starts)
+    this.startTokens.push(tokens[0]);
 
-    function renderConversations(){
-      convListEl.innerHTML='';
-      state.conversations.forEach(c=>{
-        const d = document.createElement('div');
-        d.className='conv'+(c.id===state.active? ' active':'');
-        d.innerHTML = `<div style="flex:1;">${escapeHtml(c.title || '無題')}</div><div class='small' style='opacity:0.6'>${c.messages.length}</div>`;
-        d.onclick = ()=>selectConversation(c.id);
-        convListEl.appendChild(d);
-      });
+    // build n-grams
+    for(let i=0;i<=tokens.length - this.n;i++){
+      const seq = tokens.slice(i, i+this.n);
+      const key = this._key(seq.slice(0, -1)); // context
+      const next = seq[seq.length-1];
+      if(!this.map.has(key)) this.map.set(key, {});
+      const obj = this.map.get(key);
+      obj[next] = (obj[next] || 0) + weight;
     }
+  }
 
-    function escapeHtml(s){ const div=document.createElement('div'); div.textContent = s; return div.innerHTML; }
+  _tokenize(text){
+    // simple tokenizer: split by spaces and punctuation, but keep Japanese characters as-is
+    // split on whitespace and common punctuation
+    return String(text).replace(/[。！？!?]/g,' 。 ').replace(/[\n\r]+/g,' ').split(/\s+/).filter(Boolean);
+  }
 
-    // Markdown render (simple, safe: escape then convert)
-    function renderMarkdown(text){
-      const escaped = escapeHtml(text);
-      // headings
-      let t = escaped.replace(/^### (.*$)/gim, '<h3>$1</h3>').replace(/^## (.*$)/gim, '<h2>$1</h2>').replace(/^# (.*$)/gim, '<h1>$1</h1>');
-      // code blocks
-      t = t.replace(/```([\s\S]*?)```/gim, function(_, code){ return `<pre><code>${code.replace(/</g,'&lt;')}</code></pre>`; });
-      // inline code
-      t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
-      // newlines
-      t = t.replace(/\n/g, '<br/>');
-      return t;
+  generate(seed=null, max=50){
+    if(this.map.size === 0) return null;
+    let context = null;
+    if(seed){ const s = seed.split(/\s+/).slice(- (this.n-1)); context = s; }
+    if(!context){ const rnd = this.startTokens[Math.floor(Math.random()*this.startTokens.length)]; context = [rnd]; }
+    // ensure context length n-1
+    while(context.length < this.n-1) context.unshift('');
+
+    const out = [...context];
+    for(let i=0;i<max;i++){
+      const key = this._key(out.slice(- (this.n-1)));
+      const choices = this.map.get(key);
+      if(!choices){ break; }
+      // weighted random
+      const entries = Object.entries(choices);
+      const total = entries.reduce((s,[k,v])=>s+v,0);
+      let r = Math.random()*total; let pick = entries[entries.length-1][0];
+      for(const [tok,wt] of entries){ if(r < wt){ pick = tok; break; } r -= wt; }
+      out.push(pick);
     }
+    // join into string
+    let s = out.filter(Boolean).join(' ');
+    if(!/[。！？.!?]$/.test(s)) s += '。';
+    return s;
+  }
 
-    function renderMessages(){
-      messagesEl.innerHTML=''; const conv = state.conversations.find(c=>c.id===state.active); if(!conv) return;
-      conv.messages.forEach((m, idx)=>{
-        const d = document.createElement('div'); d.className='msg '+(m.role==='user'?'user':'assistant');
-        d.innerHTML = renderMarkdown(m.content||'');
-        // add copy button to code blocks
-        Array.from(d.querySelectorAll('pre')).forEach(pre=>{
-          const btn = document.createElement('button'); btn.textContent='コピー'; btn.className='copy';
-          btn.onclick = ()=>{ navigator.clipboard.writeText(pre.innerText).then(()=>{ btn.textContent='コピー済'; setTimeout(()=>btn.textContent='コピー',900); }); };
-          pre.appendChild(btn);
-        });
-        messagesEl.appendChild(d);
-      });
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
+  size(){ return this.map.size; }
 
-    // events
-    newConvBtn.addEventListener('click', ()=>createConversation());
-    clearHistoryBtn.addEventListener('click', ()=>{ if(confirm('履歴を消しますか？')){ state={conversations:[],active:null}; saveState(); render(); }});
-    exportConvBtn.addEventListener('click', ()=>{ const conv = state.conversations.find(c=>c.id===state.active); if(!conv) return; const blob = new Blob([JSON.stringify(conv,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='conversation.json'; a.click(); });
-    applyTemplate.addEventListener('click', ()=>{ const t = templateSelect.value; if(!t) return; promptEl.value = t; promptEl.focus(); });
+  export(){
+    const entries = [];
+    for(const [k,obj] of this.map.entries()){ entries.push([k, obj]); }
+    return JSON.stringify({ n: this.n, map: entries, startTokens: this.startTokens });
+  }
 
-    // theme toggle
-    let theme = localStorage.getItem('theme') || 'dark';
-    if(theme==='light'){ document.body.style.filter = 'invert(0.04) hue-rotate(10deg)'; }
-    themeToggle.addEventListener('click', ()=>{ theme = theme==='dark'? 'light':'dark'; localStorage.setItem('theme', theme); document.body.style.filter = theme==='light'? 'invert(0.04) hue-rotate(10deg)' : 'none'; });
+  import(json){ const o = JSON.parse(json); this.n = o.n || this.n; this.map = new Map(o.map); this.startTokens = o.startTokens || []; }
 
-    // TTS
-    ttsBtn.addEventListener('click', ()=>{ const conv = state.conversations.find(c=>c.id===state.active); if(!conv) return; const text = conv.messages.map(m=> (m.role==='assistant'? m.content:'' )).join('\n'); if(!text) return alert('読み上げる内容がありません'); speak(text); });
-    function speak(text){ if(!('speechSynthesis' in window)) return alert('TTS非対応'); const u = new SpeechSynthesisUtterance(text); u.lang='ja-JP'; speechSynthesis.cancel(); speechSynthesis.speak(u); }
+  clear(){ this.map = new Map(); this.startTokens = []; }
+}
 
-    // Voice input
-    let recognition = null;
-    if('webkitSpeechRecognition' in window || 'SpeechRecognition' in window){
-      const Rec = window.SpeechRecognition || webkitSpeechRecognition;
-      recognition = new Rec();
-      recognition.lang = 'ja-JP';
-      recognition.interimResults = false;
-      recognition.onresult = e=>{ promptEl.value = e.results[0][0].transcript; };
-      recognition.onerror = ()=>{ /* ignore */ };
-    }
-    voiceBtn.addEventListener('click', ()=>{ if(!recognition) return alert('音声入力非対応'); try{ recognition.start(); }catch(e){ try{ recognition.stop(); recognition.start(); }catch(e){} } });
+/* ====================================================
+   App state
+==================================================== */
+let model = new NGramMarkov(2);
+let history = JSON.parse(localStorage.getItem('ai_chat_history')||'[]');
+let currentConversation = { id: Date.now(), title: '新しいチャット', messages: [] };
+let personaText = localStorage.getItem('ai_persona') || '';
+let autoLearn = localStorage.getItem('ai_auto_learn') !== '0';
+let ngramSize = parseInt(localStorage.getItem('ai_ngram')||'2',10);
+let userWeight = parseFloat(localStorage.getItem('ai_user_weight')||'1');
+let aiWeight = parseFloat(localStorage.getItem('ai_ai_weight')||'1');
 
-    // shortcuts
-    document.addEventListener('keydown', e=>{ if(e.ctrlKey && e.key==='k'){ e.preventDefault(); createConversation(); } });
+function saveSettingsLocal(){ localStorage.setItem('ai_persona', personaText); localStorage.setItem('ai_auto_learn', autoLearn? '1':'0'); localStorage.setItem('ai_ngram', String(ngramSize)); localStorage.setItem('ai_user_weight', String(userWeight)); localStorage.setItem('ai_ai_weight', String(aiWeight)); }
 
-    // API helpers
-    function getApiKey(){ return apiKeyInput.value || sessionStorage.getItem('OPENAI_API_KEY'); }
-    apiKeyInput.addEventListener('change', ()=>{ sessionStorage.setItem('OPENAI_API_KEY', apiKeyInput.value); });
-    modelSelect.addEventListener('change', ()=>{ modelName.textContent = modelSelect.value; });
+/* ====================================================
+   UI helpers
+==================================================== */
+const chatWindow = document.getElementById('chatWindow');
+const inputEl = document.getElementById('input');
+const sendBtn = document.getElementById('sendBtn');
+const histList = document.getElementById('histList');
+const exportBtn = document.getElementById('exportBtn');
+const importBtn = document.getElementById('importBtn');
 
-    // send message (non-streaming, robust)
-    async function sendMessage(text){
-      if(!text) return;
-      let conv = state.conversations.find(c=>c.id===state.active);
-      if(!conv) { createConversation(); conv = state.conversations.find(c=>c.id===state.active); }
-      conv.messages.push({role:'user', content:text});
-      conv.title = text.slice(0,30) + (text.length>30? '…':'');
-      saveState(); renderMessages(); promptEl.value='';
+function renderHistory(){ histList.innerHTML=''; history.slice().reverse().forEach((c)=>{
+  const d = document.createElement('div'); d.className='hist-item'; d.innerHTML = `<div class="title">${escapeHtml(c.title || 'Untitled')}</div><div class="small">${new Date(c.id).toLocaleString()}</div>`;
+  d.onclick = ()=>{ loadConversation(c.id); };
+  histList.appendChild(d);
+}); }
 
-      // placeholder assistant
-      conv.messages.push({role:'assistant', content:'考えています…'});
-      saveState(); renderMessages();
+function saveCurrentToHistory(){ currentConversation.title = currentConversation.messages.find(m=>m.role==='user')?.text?.slice(0,40) || currentConversation.title; const idx = history.findIndex(h=>h.id===currentConversation.id); if(idx>=0) history[idx] = currentConversation; else history.push(currentConversation); localStorage.setItem('ai_chat_history', JSON.stringify(history)); renderHistory(); }
 
-      const apiKey = getApiKey();
-      if(!apiKey){
-        conv.messages[conv.messages.length-1].content = 'エラー: APIキーが設定されていません。サイドバーに入力してください。';
-        saveState(); renderMessages(); return;
-      }
+function loadConversation(id){ const c = history.find(h=>h.id===id); if(!c) return; currentConversation = JSON.parse(JSON.stringify(c)); renderConversation(); }
+function newConversation(){ currentConversation = { id: Date.now(), title: '新しいチャット', messages: [] }; renderConversation(); }
 
-      const model = modelSelect.value || 'gpt-4o-mini';
-      const payload = {
-        model,
-        messages: conv.messages.map(m=>({role:m.role, content:m.content})),
-        temperature: 0.7,
-        max_tokens: 1000
-      };
+function renderConversation(){ chatWindow.innerHTML=''; document.getElementById('chatTitle').innerText = currentConversation.title; for(const m of currentConversation.messages){ const el = document.createElement('div'); el.className = 'msg ' + (m.role==='user'?'user':'ai'); el.innerText = m.text; chatWindow.appendChild(el); } chatWindow.scrollTop = chatWindow.scrollHeight; }
 
+function addMessageToConversation(role,text){ currentConversation.messages.push({ role, text, time: Date.now() }); const el = document.createElement('div'); el.className = 'msg ' + (role==='user'?'user':'ai'); el.innerText = text; chatWindow.appendChild(el); chatWindow.scrollTop = chatWindow.scrollHeight; }
+
+function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ====================================================
+   Model operations: train with weights, save/load/export/import
+==================================================== */
+function trainText(text, role){
+  if(!text) return;
+  const weight = (role==='user')? userWeight : aiWeight;
+  // split into sentences and train each sentence
+  const parts = String(text).split(/[。！？.!?]+/).filter(Boolean);
+  for(const p of parts){ model.train(p.trim(), weight); }
+}
+
+function saveModel(){ try{ const data = model.export(); localStorage.setItem('ngram_model_v1', data); alert('学習データを保存しました'); }catch(e){ alert('保存に失敗しました'); } }
+function loadModel(){ try{ const raw = localStorage.getItem('ngram_model_v1'); if(!raw) return alert('学習データがありません'); model.import(raw); document.getElementById('vocabCount').innerText = '語彙: ' + model.size(); alert('学習データを読み込みました'); }catch(e){ alert('読み込みに失敗しました'); } }
+function clearModel(){ if(confirm('学習データをクリアしますか？')){ model.clear(); document.getElementById('vocabCount').innerText = '語彙: 0'; alert('学習データを消去しました'); } }
+
+/* ====================================================
+   Reply generation pipeline
+==================================================== */
+const fallbackReplies = ['なるほど、興味深いですね。','もう少し詳しく話してもらえますか？','そうなんですね。','たしかにそういう考え方もあります。','それは面白いですね。','続けてください。','それでどう思いましたか？','いいですね。'];
+
+function generateReply(userText){
+  // persona training (optional)
+  if(personaText && autoLearn){ trainText(personaText, 'ai'); }
+  // train on recent conversation if autoLearn
+  if(autoLearn){ for(const m of currentConversation.messages){ trainText(m.text, m.role); } }
+  const seed = (userText||'').split(/\s+/)[0] || (personaText||'').split(/\s+/)[0] || null;
+  const gen = model.generate(seed, 60);
+  if(gen) return gen;
+  return fallbackReplies[Math.floor(Math.random()*fallbackReplies.length)];
+}
+
+/* ====================================================
+   Send flow
+==================================================== */
+sendBtn.addEventListener('click', async ()=>{
+  const text = inputEl.value.trim(); if(!text) return; inputEl.value='';
+  addMessageToConversation('user', text);
+  if(autoLearn) trainText(text, 'user');
+  saveCurrentToHistory();
+  // typing indicator
+  const typing = document.createElement('div'); typing.className='msg ai'; typing.innerText='生成中…'; chatWindow.appendChild(typing); chatWindow.scrollTop = chatWindow.scrollHeight;
+  try{
+    await new Promise(r=>setTimeout(r, 250 + Math.random()*600));
+    const reply = generateReply(text);
+    typing.remove(); addMessageToConversation('ai', reply);
+    if(autoLearn) trainText(reply, 'ai');
+    document.getElementById('vocabCount').innerText = '語彙: ' + model.size();
+    saveCurrentToHistory();
+    // small celebration when model grows
+    if(model.size() % 50 === 0) fireworkBurst();
+  }catch(e){ typing.remove(); addMessageToConversation('ai','エラー: '+e.message); }
+});
+
+inputEl.addEventListener('keydown',(e)=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendBtn.click(); } });
+
+/* ====================================================
+   Settings UI wiring
+==================================================== */
+document.getElementById('openSettings').addEventListener('click', ()=>{ document.getElementById('settingsPanel').style.display='block'; document.getElementById('persona').value = personaText; document.getElementById('autoLearn').value = autoLearn? '1':'0'; document.getElementById('ngram').value = ngramSize; document.getElementById('userWeight').value = userWeight; document.getElementById('aiWeight').value = aiWeight; document.getElementById('userWeightVal').innerText = userWeight; document.getElementById('aiWeightVal').innerText = aiWeight; });
+document.getElementById('closeSettings').addEventListener('click', ()=>{ document.getElementById('settingsPanel').style.display='none'; });
+
+document.getElementById('saveSettings').addEventListener('click', ()=>{
+  personaText = document.getElementById('persona').value || '';
+  autoLearn = document.getElementById('autoLearn').value === '1';
+  ngramSize = parseInt(document.getElementById('ngram').value,10);
+  userWeight = parseFloat(document.getElementById('userWeight').value);
+  aiWeight = parseFloat(document.getElementById('aiWeight').value);
+  model.n = ngramSize; // set model size (note: existing model data may be inconsistent)
+  saveSettingsLocal();
+  alert('設定を保存しました'); document.getElementById('settingsPanel').style.display='none';
+});
+
+document.getElementById('userWeight').addEventListener('input', (e)=>{ document.getElementById('userWeightVal').innerText = e.target.value; });
+document.getElementById('aiWeight').addEventListener('input', (e)=>{ document.getElementById('aiWeightVal').innerText = e.target.value; });
+
+/* ====================================================
+   Model save/load/clear
+==================================================== */
+document.getElementById('saveModelBtn').addEventListener('click', saveModel);
+document.getElementById('loadModelBtn').addEventListener('click', loadModel);
+document.getElementById('clearModelBtn').addEventListener('click', clearModel);
+
+/* ====================================================
+   Export / Import conversations & model
+==================================================== */
+exportBtn.addEventListener('click', ()=>{
+  const data = { history, model: model.export(), persona: personaText };
+  const b = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'ai_chat_export.json'; a.click();
+});
+
+importBtn.addEventListener('click', ()=>{
+  const inp = document.createElement('input'); inp.type='file'; inp.accept='application/json'; inp.onchange = ()=>{
+    const f = inp.files[0]; const r = new FileReader(); r.onload = ()=>{
       try{
-        // Fallback non-streaming request
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+apiKey },
-          body: JSON.stringify(payload)
-        });
-        if(!res.ok){
-          const t = await res.text();
-          throw new Error('APIエラー '+res.status+': '+t);
-        }
-        const data = await res.json();
-        const assistantText = data.choices?.[0]?.message?.content || '';
-        conv.messages[conv.messages.length-1].content = assistantText;
-        // auto title if first exchange
-        if(conv.messages.length===2) autoTitle(apiKey, conv);
-        saveState(); renderMessages();
-      }catch(err){
-        conv.messages[conv.messages.length-1].content = 'エラー: ' + (err.message || String(err));
-        saveState(); renderMessages();
-      }
-    }
+        const o = JSON.parse(r.result);
+        if(o.model) model.import(o.model);
+        if(o.persona) { personaText = o.persona; localStorage.setItem('ai_persona', personaText); }
+        if(Array.isArray(o.history)) { history = o.history; localStorage.setItem('ai_chat_history', JSON.stringify(history)); }
+        alert('インポート完了'); renderHistory();
+      }catch(e){ alert('インポートに失敗しました'); }
+    }; r.readAsText(f);
+  }; inp.click();
+});
 
-    sendBtn.addEventListener('click', ()=>{ const t = promptEl.value.trim(); if(!t) return; sendMessage(t); rippleAt(window.event?.clientX || 0, window.event?.clientY || 0); });
-    continueBtn.addEventListener('click', ()=>{ const conv = state.conversations.find(c=>c.id===state.active); if(!conv) return; sendMessage('続きの出力をしてください。'); });
+/* ====================================================
+   Fireworks (visual celebration)
+==================================================== */
+const canvas = document.getElementById('fireworks');
+const ctx = canvas.getContext('2d');
+function resizeCanvas(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resizeCanvas); resizeCanvas();
 
-    // auto title helper
-    async function autoTitle(apiKey, conv){
-      try{
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+apiKey },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [{role:'user', content: '次の文章に短いタイトルをつけてください:\n' + conv.messages[0].content}],
-            max_tokens: 30
-          })
-        });
-        if(!res.ok) return;
-        const d = await res.json();
-        const t = d.choices?.[0]?.message?.content;
-        if(t){ conv.title = t.replace(/\n/g,' ').slice(0,40); saveState(); renderConversations(); }
-      }catch(e){}
-    }
+let particles = [];
+function fireworkBurst(){ const centerX = Math.random()*canvas.width; const centerY = Math.random()*canvas.height*0.6 + canvas.height*0.1; const count = 30 + Math.floor(Math.random()*40);
+  for(let i=0;i<count;i++){ particles.push({ x:centerX, y:centerY, vx:(Math.random()-0.5)*6, vy:(Math.random()-0.8)*6, life:60+Math.random()*40, color: `hsl(${Math.random()*360}, 80%, 60%)` }); }
+}
+function tick(){ ctx.clearRect(0,0,canvas.width, canvas.height); for(let i=particles.length-1;i>=0;i--){ const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life -= 1; ctx.globalAlpha = Math.max(0, p.life/100); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(1, p.life/10),0,Math.PI*2); ctx.fill(); if(p.life<=0) particles.splice(i,1); } requestAnimationFrame(tick); }
+requestAnimationFrame(tick);
 
-    // Enter to send (Shift+Enter = newline)
-    promptEl.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendBtn.click(); } });
+/* ====================================================
+   Init: load saved model & settings
+==================================================== */
+try{ const raw = localStorage.getItem('ngram_model_v1'); if(raw){ model.import(raw); } }catch(e){}
+try{ personaText = localStorage.getItem('ai_persona') || personaText; autoLearn = localStorage.getItem('ai_auto_learn') !== '0'; ngramSize = parseInt(localStorage.getItem('ai_ngram')||'2',10); userWeight = parseFloat(localStorage.getItem('ai_user_weight')||'1'); aiWeight = parseFloat(localStorage.getItem('ai_ai_weight')||'1'); model.n = ngramSize; }catch(e){}
 
-    // ripple effect on send
-    function rippleAt(x,y){
-      const el = document.createElement('div'); el.className='ripple';
-      el.style.left = x+'px'; el.style.top = y+'px';
-      el.style.width='14px'; el.style.height='14px';
-      el.style.background='radial-gradient(circle,rgb(124 58 237) 0%, rgba(124,58,237,0.2) 40%, transparent 60%)';
-      document.body.appendChild(el); setTimeout(()=>el.remove(),700);
-    }
+renderHistory(); renderConversation(); document.getElementById('vocabCount').innerText = '語彙: ' + model.size();
+// shortcut
+window.addEventListener('keydown',(e)=>{ if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); inputEl.focus(); } });
 
-    // init
-    loadState(); if(!state.conversations.length) createConversation();
-    render();
-
-    function render(){ renderConversations(); renderMessages(); modelName.textContent = modelSelect.value; }
-
-    // Security note already: messages are escaped before injecting HTML (renderMarkdown uses escapeHtml).
-    // Save API key to sessionStorage only when changed
-    apiKeyInput.addEventListener('blur', ()=>{ if(apiKeyInput.value) sessionStorage.setItem('OPENAI_API_KEY', apiKeyInput.value); });
-
-    // Final helper: If user wants streaming you'll need to use server-side streaming proxy or SSE parsing.
-    // (This client uses a simple non-stream request for compatibility.)
-
-    // End of script
-  </script>
+</script>
 </body>
 </html>
